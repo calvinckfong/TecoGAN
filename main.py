@@ -8,6 +8,7 @@ import os, math, time, collections, numpy as np
 Disable Logs for now '''
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
+import tensorflow_addons as tfa
 from tensorflow.python.util import deprecation
 deprecation._PRINT_DEPRECATION_WARNINGS = False
 import random as rn
@@ -16,9 +17,11 @@ import random as rn
 os.environ['PYTHONHASHSEED'] = '0'
 np.random.seed(42)
 rn.seed(12345)
-tf.set_random_seed(1234)
+#tf.set_random_seed(1234)
+tf.random.set_seed(1234) # tf api changed since 2.0
 
-import tensorflow.contrib.slim as slim
+#import tensorflow.contrib.slim as slim
+import tf_slim as slim # contrib no longer exists since tf 2.0
 import sys, shutil, subprocess
 
 from lib.ops import *
@@ -27,7 +30,8 @@ from lib.frvsr import generator_F, fnet
 from lib.Teco import FRVSR, TecoGAN
 
 
-Flags = tf.app.flags
+#Flags = tf.app.flags
+Flags = tf.compat.v1.flags
 
 Flags.DEFINE_integer('rand_seed', 1 , 'random seed' )
 
@@ -110,7 +114,9 @@ os.environ["CUDA_VISIBLE_DEVICES"]=FLAGS.cudaID
 my_seed = FLAGS.rand_seed
 rn.seed(my_seed)
 np.random.seed(my_seed)
-tf.set_random_seed(my_seed)
+
+#tf.set_random_seed(my_seed)
+tf.random.set_seed(my_seed) # api changed after tf 2.0
 
 # Check the output_dir is given
 if FLAGS.output_dir is None:
@@ -135,7 +141,9 @@ class Logger(object):
         
 sys.stdout = Logger()
 
-def printVariable(scope, key = tf.GraphKeys.MODEL_VARIABLES):
+#def printVariable(scope, key = tf.GraphKeys.MODEL_VARIABLES):
+def printVariable(scope, key = tf.compat.v1.GraphKeys.MODEL_VARIABLES):
+
     print("Scope %s:" % scope)
     variables_names = [ [v.name, v.get_shape().as_list()] for v in tf.get_collection(key, scope=scope)]
     total_sz = 0
@@ -181,6 +189,8 @@ if FLAGS.mode == 'inference':
     if FLAGS.checkpoint is None:
         raise ValueError('The checkpoint file is needed to performing the test.')
 
+    tf.compat.v1.disable_eager_execution()
+
     # Declare the test data reader
     inference_data = inference_data_loader(FLAGS)
     input_shape = [1,] + list(inference_data.inputs[0].shape)
@@ -192,42 +202,44 @@ if FLAGS.mode == 'inference':
     print("output shape:", output_shape)
     
     # build the graph
-    inputs_raw = tf.placeholder(tf.float32, shape=input_shape, name='inputs_raw')
+    #inputs_raw = tf.placeholder(tf.float32, shape=input_shape, name='inputs_raw')
+    inputs_raw = tf.compat.v1.placeholder(tf.float32, shape=input_shape, name='inputs_raw')
     
     pre_inputs = tf.Variable(tf.zeros(input_shape), trainable=False, name='pre_inputs')
     pre_gen = tf.Variable(tf.zeros(output_shape), trainable=False, name='pre_gen')
     pre_warp = tf.Variable(tf.zeros(output_shape), trainable=False, name='pre_warp')
     
-    transpose_pre = tf.space_to_depth(pre_warp, 4)
+    #transpose_pre = tf.space_to_depth(pre_warp, 4)
+    transpose_pre = tf.compat.v1.space_to_depth(pre_warp, 4)
     inputs_all = tf.concat( (inputs_raw, transpose_pre), axis = -1)
-    with tf.variable_scope('generator'):
+    with tf.compat.v1.variable_scope('generator'):
         gen_output = generator_F(inputs_all, 3, reuse=False, FLAGS=FLAGS)
         # Deprocess the images outputed from the model, and assign things for next frame
-        with tf.control_dependencies([ tf.assign(pre_inputs, inputs_raw)]):
-            outputs = tf.assign(pre_gen, deprocess(gen_output))
+        with tf.control_dependencies([ tf.compat.v1.assign(pre_inputs, inputs_raw)]):
+            outputs = tf.compat.v1.assign(pre_gen, deprocess(gen_output))
     
     inputs_frames = tf.concat( (pre_inputs, inputs_raw), axis = -1)
-    with tf.variable_scope('fnet'):
+    with tf.compat.v1.variable_scope('fnet'):
         gen_flow_lr = fnet( inputs_frames, reuse=False)
         gen_flow_lr = tf.pad(gen_flow_lr, paddings, "SYMMETRIC") 
         gen_flow = upscale_four(gen_flow_lr*4.0)
         gen_flow.set_shape( output_shape[:-1]+[2] )
-    pre_warp_hi = tf.contrib.image.dense_image_warp(pre_gen, gen_flow)
-    before_ops = tf.assign(pre_warp, pre_warp_hi)
+    pre_warp_hi = tfa.image.dense_image_warp(pre_gen, gen_flow)
+    before_ops = tf.compat.v1.assign(pre_warp, pre_warp_hi)
 
     print('Finish building the network')
     
     # In inference time, we only need to restore the weight of the generator
-    var_list = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES, scope='generator')
-    var_list = var_list + tf.get_collection(tf.GraphKeys.MODEL_VARIABLES, scope='fnet')
+    var_list = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.MODEL_VARIABLES, scope='generator')
+    var_list = var_list + tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.MODEL_VARIABLES, scope='fnet')
     
-    weight_initiallizer = tf.train.Saver(var_list)
+    weight_initiallizer = tf.compat.v1.train.Saver(var_list)
     
     # Define the initialization operation
-    init_op = tf.global_variables_initializer()
-    local_init_op = tf.local_variables_initializer()
+    init_op = tf.compat.v1.global_variables_initializer()
+    local_init_op = tf.compat.v1.local_variables_initializer()
 
-    config = tf.ConfigProto()
+    config = tf.compat.v1.ConfigProto()
     config.gpu_options.allow_growth = True
     if (FLAGS.output_pre == ""):
         image_dir = FLAGS.output_dir
@@ -235,8 +247,9 @@ if FLAGS.mode == 'inference':
         image_dir = os.path.join(FLAGS.output_dir, FLAGS.output_pre)
     if not os.path.exists(image_dir):
         os.makedirs(image_dir)
-        
-    with tf.Session(config=config) as sess:
+
+            
+    with tf.compat.v1.Session(config=config) as sess:
         # Load the pretrained model
         sess.run(init_op)
         sess.run(local_init_op)
@@ -304,24 +317,24 @@ elif FLAGS.mode == 'train':
     val_merged = tf.summary.merge(validat_summary)
 
     # Define the saver and weight initiallizer
-    saver = tf.train.Saver(max_to_keep=50)
+    saver = tf.compat.v1.train.Saver(max_to_keep=50)
     # variable lists
-    all_var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
-    tfflag = tf.GraphKeys.MODEL_VARIABLES #tf.GraphKeys.TRAINABLE_VARIABLES
+    all_var_list = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES)
+    tfflag = tf.compat.v1.GraphKeys.MODEL_VARIABLES #tf.GraphKeys.TRAINABLE_VARIABLES
     
     if (FLAGS.checkpoint is not None) and (FLAGS.pre_trained_model is True):
-        model_var_list = tf.get_collection(tfflag, scope='generator') + tf.get_collection(tfflag, scope='fnet')
+        model_var_list = tf.compat.v1.get_collection(tfflag, scope='generator') + tf.compat.v1.get_collection(tfflag, scope='fnet')
         assign_ops = get_existing_from_ckpt(FLAGS.checkpoint, model_var_list, rest_zero=True, print_level=1)
         print('Prepare to load %d weights from the pre-trained model for generator and fnet'%len(assign_ops))
         if FLAGS.ratio>0:
-            model_var_list = tf.get_collection(tfflag, scope='tdiscriminator')
+            model_var_list = tf.compat.v1.get_collection(tfflag, scope='tdiscriminator')
             dis_list = get_existing_from_ckpt(FLAGS.checkpoint, model_var_list, print_level=0)
             print('Prepare to load %d weights from the pre-trained model for discriminator'%len(dis_list))
             assign_ops += dis_list
         
     if FLAGS.vgg_scaling > 0.0: # VGG weights are not trainable
-        vgg_var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='vgg_19')
-        vgg_restore = tf.train.Saver(vgg_var_list)
+        vgg_var_list = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES, scope='vgg_19')
+        vgg_restore = tf.compat.v1.train.Saver(vgg_var_list)
     
     print('Finish building the network.')
     
@@ -338,7 +351,7 @@ elif FLAGS.mode == 'train':
             printVariable('tdiscriminator')
                 
         if FLAGS.vgg_scaling > 0.0:
-            printVariable('vgg_19', tf.GraphKeys.GLOBAL_VARIABLES)
+            printVariable('vgg_19', tf.compat.v1.GraphKeys.GLOBAL_VARIABLES)
             vgg_restore.restore(sess, FLAGS.vgg_ckpt)
             print('VGG19 restored successfully!!')
                 

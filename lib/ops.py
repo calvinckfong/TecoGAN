@@ -1,5 +1,6 @@
 import tensorflow as tf
-import tensorflow.contrib.slim as slim
+#import tensorflow.contrib.slim as slim
+import tf_slim as slim
 import pdb
 import keras
 
@@ -34,44 +35,44 @@ def deprocessLR(image):
 # Define the convolution transpose building block
 def conv2_tran(batch_input, kernel=3, output_channel=64, stride=1, use_bias=True, scope='conv'):
     # kernel: An integer specifying the width and height of the 2D convolution window
-    with tf.variable_scope(scope):
+    with tf.compat.v1.variable_scope(scope):
         if use_bias:
             return slim.conv2d_transpose(batch_input, output_channel, [kernel, kernel], stride, 'SAME', data_format='NHWC',
-                            activation_fn=None, weights_initializer=tf.contrib.layers.xavier_initializer())
+                            activation_fn=None, weights_initializer=tf.initializers.GlorotUniform())
         else:
             return slim.conv2d_transpose(batch_input, output_channel, [kernel, kernel], stride, 'SAME', data_format='NHWC',
-                            activation_fn=None, weights_initializer=tf.contrib.layers.xavier_initializer(),
+                            activation_fn=None, weights_initializer=tf.initializers.GlorotUniform(),
                             biases_initializer=None)
 
 # Define the convolution building block
 def conv2(batch_input, kernel=3, output_channel=64, stride=1, use_bias=True, scope='conv'):
     # kernel: An integer specifying the width and height of the 2D convolution window
-    with tf.variable_scope(scope):
+    with tf.compat.v1.variable_scope(scope):
         if use_bias:
             return slim.conv2d(batch_input, output_channel, [kernel, kernel], stride, 'SAME', data_format='NHWC',
-                            activation_fn=None, weights_initializer=tf.contrib.layers.xavier_initializer())
+                            activation_fn=None, weights_initializer=tf.initializers.GlorotUniform())
         else:
             return slim.conv2d(batch_input, output_channel, [kernel, kernel], stride, 'SAME', data_format='NHWC',
-                            activation_fn=None, weights_initializer=tf.contrib.layers.xavier_initializer(),
+                            activation_fn=None, weights_initializer=tf.initializers.GlorotUniform(),
                             biases_initializer=None)
 
 
 def conv2_NCHW(batch_input, kernel=3, output_channel=64, stride=1, use_bias=True, scope='conv_NCHW'):
     # Use NCWH to speed up the inference
     # kernel: list of 2 integer specifying the width and height of the 2D convolution window
-    with tf.variable_scope(scope):
+    with tf.compat.v1.variable_scope(scope):
         if use_bias:
             return slim.conv2d(batch_input, output_channel, [kernel, kernel], stride, 'SAME', data_format='NCWH',
-                               activation_fn=None, weights_initializer=tf.contrib.layers.xavier_initializer())
+                               activation_fn=None, weights_initializer=tf.initializers.GlorotUniform())
         else:
             return slim.conv2d(batch_input, output_channel, [kernel, kernel], stride, 'SAME', data_format='NCWH',
-                               activation_fn=None, weights_initializer=tf.contrib.layers.xavier_initializer(),
+                               activation_fn=None, weights_initializer=tf.initializers.GlorotUniform(),
                                biases_initializer=None)
 
 
 # Define our tensorflow version PRelu
 def prelu_tf(inputs, name='Prelu'):
-    with tf.variable_scope(name):
+    with tf.compat.v1.variable_scope(name):
         alphas = tf.get_variable('alpha', inputs.get_shape()[-1], initializer=tf.zeros_initializer(), \
             collections=[tf.GraphKeys.GLOBAL_VARIABLES, tf.GraphKeys.TRAINABLE_VARIABLES, tf.GraphKeys.MODEL_VARIABLES ],dtype=tf.float32)
     pos = tf.nn.relu(inputs)
@@ -95,7 +96,7 @@ def maxpool(inputs, scope='maxpool'):
 # Our dense layer
 def denselayer(inputs, output_size):
     # Rachel todo, put it to Model variable_scope
-    denseLayer = tf.layers.Dense(output_size, activation=None, kernel_initializer=tf.contrib.layers.xavier_initializer())
+    denseLayer = tf.layers.Dense(output_size, activation=None, kernel_initializer=tf.initializers.GlorotUniform())
     output = denseLayer.apply(inputs)
     tf.add_to_collection( name=tf.GraphKeys.MODEL_VARIABLES, value=denseLayer.kernel )
     #output = tf.layers.dense(inputs, output_size, activation=None, kernel_initializer=tf.contrib.layers.xavier_initializer())
@@ -124,7 +125,7 @@ def pixelShuffler(inputs, scale=2):
     return output
     
 def upscale_four(inputs, scope='upscale_four'): # mimic the tensorflow bilinear-upscaling for a fix ratio of 4
-    with tf.variable_scope(scope):
+    with tf.compat.v1.variable_scope(scope):
         size = tf.shape(inputs)
         b = size[0]
         h = size[1]
@@ -170,7 +171,7 @@ def bicubic_four(inputs, scope='bicubic_four'):
         **Parallel Catmull-Rom Spline Interpolation Algorithm for Image Zooming Based on CUDA*[Wu et. al.]**
     '''
     
-    with tf.variable_scope(scope):
+    with tf.compat.v1.variable_scope(scope):
         size = tf.shape(inputs)
         b = size[0]
         h = size[1]
@@ -311,7 +312,7 @@ def vgg_19(inputs,
   Returns:
     the last op containing the log predictions and end_points dict.
   """
-  with tf.variable_scope(scope, 'vgg_19', [inputs], reuse=reuse) as sc:
+  with tf.compat.v1.variable_scope(scope, 'vgg_19', [inputs], reuse=reuse) as sc:
     end_points_collection = sc.name + '_end_points'
     # Collect outputs for conv2d, fully_connected and max_pool2d.
     with slim.arg_scope([slim.conv2d, slim.fully_connected, slim.max_pool2d],
