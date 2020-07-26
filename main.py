@@ -145,7 +145,7 @@ sys.stdout = Logger()
 def printVariable(scope, key = tf.compat.v1.GraphKeys.MODEL_VARIABLES):
 
     print("Scope %s:" % scope)
-    variables_names = [ [v.name, v.get_shape().as_list()] for v in tf.get_collection(key, scope=scope)]
+    variables_names = [ [v.name, v.get_shape().as_list()] for v in tf.compat.v1.get_collection(key, scope=scope)]
     total_sz = 0
     for k in variables_names:
         print ("Variable: " + k[0])
@@ -284,12 +284,14 @@ if FLAGS.mode == 'inference':
         
 # The training mode
 elif FLAGS.mode == 'train':
+    tf.compat.v1.disable_eager_execution()
+	
     # hard coded save
     filelist = ['main.py','lib/Teco.py','lib/frvsr.py','lib/dataloader.py','lib/ops.py']
     for filename in filelist:
         shutil.copyfile('./' + filename, FLAGS.summary_dir + filename.replace("/","_"))
         
-    useValidat = tf.placeholder_with_default( tf.constant(False, dtype=tf.bool), shape=() )
+    useValidat = tf.compat.v1.placeholder_with_default( tf.constant(False, dtype=tf.bool), shape=() )
     rdata = frvsr_gpu_data_loader(FLAGS, useValidat)
     # Data = collections.namedtuple('Data', 'paths_HR, s_inputs, s_targets, image_count, steps_per_epoch')
     print('tData count = %d, steps per epoch %d' % (rdata.image_count, rdata.steps_per_epoch))
@@ -301,20 +303,20 @@ elif FLAGS.mode == 'train':
     #                                     'update_list_name, update_list_avg, image_summary')
     
     # Add scalar summary
-    tf.summary.scalar('learning_rate', Net.learning_rate)
+    tf.compat.v1.summary.scalar('learning_rate', Net.learning_rate)
     train_summary = []
     for key, value in zip(Net.update_list_name, Net.update_list_avg):
         # 'map_loss, scale_loss, FrameA_loss, FrameA_loss,...'
-        train_summary += [tf.summary.scalar(key, value)]
+        train_summary += [tf.compat.v1.summary.scalar(key, value)]
     train_summary += Net.image_summary
-    merged = tf.summary.merge(train_summary)
+    merged = tf.compat.v1.summary.merge(train_summary)
     
     validat_summary = [] # val data statistics is not added to average
     uplen = len(Net.update_list)
     for key, value in zip(Net.update_list_name[:uplen], Net.update_list):
         # 'map_loss, scale_loss, FrameA_loss, FrameA_loss,...'
-        validat_summary += [tf.summary.scalar("val_" + key, value)]
-    val_merged = tf.summary.merge(validat_summary)
+        validat_summary += [tf.compat.v1.summary.scalar("val_" + key, value)]
+    val_merged = tf.compat.v1.summary.merge(validat_summary)
 
     # Define the saver and weight initiallizer
     saver = tf.compat.v1.train.Saver(max_to_keep=50)
@@ -339,11 +341,12 @@ elif FLAGS.mode == 'train':
     print('Finish building the network.')
     
     # Start the session
-    config = tf.ConfigProto()
+    config = tf.compat.v1.ConfigProto()
     config.gpu_options.allow_growth = True
     # init_op = tf.initialize_all_variables() # MonitoredTrainingSession will initialize automatically
-    with tf.train.MonitoredTrainingSession(config=config, save_summaries_secs=None, save_checkpoint_secs=None) as sess:
-        train_writer = tf.summary.FileWriter(FLAGS.summary_dir, sess.graph)
+    with tf.compat.v1.train.MonitoredTrainingSession(config=config, save_summaries_secs=None, save_checkpoint_secs=None) as sess:
+    #with tf.compat.v1.Session(config=config) as sess:
+        train_writer = tf.compat.v1.summary.FileWriter(FLAGS.summary_dir, sess.graph)
         
         printVariable('generator')
         printVariable('fnet')

@@ -132,7 +132,8 @@ elif( runcase == 3 ): # Train TecoGAN
         cmd0 += "unzip model/ofrvsr.zip -d model; rm model/ofrvsr.zip"
         subprocess.call(cmd0, shell=True)
     
-    TrainingDataPath = "/mnt/netdisk/video_data/" 
+    #TrainingDataPath = "/mnt/netdisk/video_data/" 
+    TrainingDataPath = "./TrainingData/" 
     
     '''Prepare Training Folder'''
     # path appendix, manually define it, or use the current datetime, now_str = "mm-dd-hh"
@@ -177,9 +178,9 @@ elif( runcase == 3 ): # Train TecoGAN
     cmd1 += [
         "--input_video_dir", TrainingDataPath, 
         "--input_video_pre", "scene",
-        "--str_dir", "2000",
-        "--end_dir", "2250",
-        "--end_dir_val", "2290",
+        "--str_dir", "2501",
+        "--end_dir", "2689",
+        "--end_dir_val", "2690",
         "--max_frm", "119",
         # -- cpu memory for data loading --
         "--queue_thread", "12",# Cpu threads for the data. >4 to speedup the training

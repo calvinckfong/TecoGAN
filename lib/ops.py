@@ -8,6 +8,7 @@ import numpy as np, cv2 as cv, scipy
 from scipy import signal
 import collections
 from tensorflow.python.ops import summary_op_util
+from tensorflow.python.distribute.summary_op_util import skip_summary
 
 ### tensorflow functions ######################################################
 
@@ -74,7 +75,7 @@ def conv2_NCHW(batch_input, kernel=3, output_channel=64, stride=1, use_bias=True
 def prelu_tf(inputs, name='Prelu'):
     with tf.compat.v1.variable_scope(name):
         alphas = tf.get_variable('alpha', inputs.get_shape()[-1], initializer=tf.zeros_initializer(), \
-            collections=[tf.GraphKeys.GLOBAL_VARIABLES, tf.GraphKeys.TRAINABLE_VARIABLES, tf.GraphKeys.MODEL_VARIABLES ],dtype=tf.float32)
+            collections=[tf.compat.v1.GraphKeys.GLOBAL_VARIABLES, tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES, tf.compat.v1.GraphKeys.MODEL_VARIABLES ],dtype=tf.float32)
     pos = tf.nn.relu(inputs)
     neg = alphas * (inputs - abs(inputs)) * 0.5
 
@@ -87,7 +88,7 @@ def lrelu(inputs, alpha):
 
 
 def batchnorm(inputs, is_training):
-    return slim.batch_norm(inputs, decay=0.9, epsilon=0.001, updates_collections=tf.GraphKeys.UPDATE_OPS,
+    return slim.batch_norm(inputs, decay=0.9, epsilon=0.001, updates_collections=tf.compat.v1.GraphKeys.UPDATE_OPS,
                         scale=False, fused=True, is_training=is_training)
 
 def maxpool(inputs, scope='maxpool'):
@@ -96,9 +97,9 @@ def maxpool(inputs, scope='maxpool'):
 # Our dense layer
 def denselayer(inputs, output_size):
     # Rachel todo, put it to Model variable_scope
-    denseLayer = tf.layers.Dense(output_size, activation=None, kernel_initializer=tf.initializers.GlorotUniform())
+    denseLayer = tf.compat.v1.layers.Dense(output_size, activation=None, kernel_initializer=tf.initializers.GlorotUniform())
     output = denseLayer.apply(inputs)
-    tf.add_to_collection( name=tf.GraphKeys.MODEL_VARIABLES, value=denseLayer.kernel )
+    tf.compat.v1.add_to_collection( name=tf.compat.v1.GraphKeys.MODEL_VARIABLES, value=denseLayer.kernel )
     #output = tf.layers.dense(inputs, output_size, activation=None, kernel_initializer=tf.contrib.layers.xavier_initializer())
     
     return output
@@ -360,7 +361,7 @@ def tf_data_gaussDownby4( HRdata, sigma = 1.5 ):
         [gau_0, gau_0, gau_k]]  ) # only works for RGB images!
     gau_wei = np.transpose( gau_list, [2,3,0,1] )
     
-    with tf.device('/gpu:0'):
+    with tf.device('/job:localhost/replica:0/task:0/device:XLA_GPU:0'):
         fix_gkern = tf.constant( gau_wei, dtype = tf.float32, shape = [k_w, k_w, 3, 3], name='gauss_blurWeights' )
         # shape [batch_size, crop_h, crop_w, 3]
         cur_data = tf.nn.conv2d(HRdata, fix_gkern, strides=[1,4,4,1], padding="VALID", name='gauss_downsample_4')
@@ -372,7 +373,7 @@ def get_existing_from_ckpt(ckpt, var_list=None, rest_zero=False, print_level=1):
     reader = tf.train.load_checkpoint(ckpt)
     ops = []
     if(var_list is None):
-        var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
+        var_list = tf.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES)
     for var in var_list:
         tensor_name = var.name.split(':')[0]
         if reader.has_tensor(tensor_name):
@@ -505,16 +506,17 @@ def gif_summary(name, tensor, max_outputs, fps, collections=None, family=None):
     """
     tensor = tf.image.convert_image_dtype(tensor, dtype=tf.uint8, saturate=True)
     # tensor = tf.convert_to_tensor(tensor)
-    if summary_op_util.skip_summary():
+    # if summary_op_util.skip_summary():
+    if skip_summary():
         return tf.constant("")
     with summary_op_util.summary_scope(name, family, values=[tensor]) as (tag, scope):
-          val = tf.py_func(
+          val = tf.compat.v1.py_func(
               py_gif_summary,
               [tag, tensor, max_outputs, fps],
               tf.string,
               stateful=False,
               name=scope)
-          summary_op_util.collect(val, collections, [tf.GraphKeys.SUMMARIES])
+          summary_op_util.collect(val, collections, [tf.compat.v1.GraphKeys.SUMMARIES])
     return val
 
 
